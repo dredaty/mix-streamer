@@ -1,0 +1,63 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  plugin:
+    name: VST3 (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            artifact: MixStreamer-VST3-Windows-x64
+            configure: cmake -B build -A x64
+          - name: macOS Universal
+            os: macos-latest
+            artifact: MixStreamer-VST3-macOS-Universal
+            configure: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+    defaults:
+      run:
+        working-directory: plugin
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (downloads JUCE)
+        run: ${{ matrix.configure }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Sign ad-hoc + verify (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          BUNDLE="build/MixStreamer_artefacts/Release/VST3/Mix Streamer.vst3"
+          codesign --force --deep --sign - "$BUNDLE"
+          lipo -info "$BUNDLE/Contents/MacOS/Mix Streamer"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: plugin/build/MixStreamer_artefacts/Release/VST3/
+          if-no-files-found: error
+
+  server:
+    name: Server selftest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
