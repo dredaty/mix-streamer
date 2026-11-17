@@ -25,6 +25,7 @@ public:
     bool poll();
 
     std::function<void (const juce::String&)> onTextMessage;
+    std::function<void (const juce::uint8*, size_t)> onBinaryMessage;
 
 private:
     bool sendFrame (juce::uint8 opcode, const void* data, size_t numBytes);

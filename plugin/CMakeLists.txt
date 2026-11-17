@@ -11,6 +11,7 @@ endif()
 project(MixStreamer VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Windows: static CRT so the .vst3 has no VC++ redistributable dependency.
@@ -47,11 +48,22 @@ juce_add_plugin(MixStreamer
     VST3_CATEGORIES             Fx Tools
     COPY_PLUGIN_AFTER_BUILD     ${MIXSTREAMER_COPY_PLUGIN})
 
-target_sources(MixStreamer PRIVATE
+# Web player (../web) is embedded into the plug-in.
+juce_add_binary_data(MixStreamerWeb
+    HEADER_NAME BinaryData.h
+    NAMESPACE   BinaryData
+    SOURCES
+        ../web/index.html
+        ../web/app.js
+        ../web/worklet.js)
+
+set(MIXSTREAMER_SOURCES
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/StreamSender.cpp
-    Source/WebSocketClient.cpp)
+    Source/StreamHub.cpp)
+
+target_sources(MixStreamer PRIVATE ${MIXSTREAMER_SOURCES})
 
 target_compile_definitions(MixStreamer PUBLIC
     JUCE_WEB_BROWSER=0
@@ -61,6 +73,7 @@ target_compile_definitions(MixStreamer PUBLIC
 
 target_link_libraries(MixStreamer
     PRIVATE
+        MixStreamerWeb
         juce::juce_audio_utils
         juce::juce_audio_processors
     PUBLIC
@@ -74,13 +87,12 @@ if(MIXSTREAMER_BUILD_TESTS)
     juce_add_console_app(MixStreamerHeadlessTest PRODUCT_NAME "MixStreamerHeadlessTest")
     target_sources(MixStreamerHeadlessTest PRIVATE
         tests/HeadlessTest.cpp
-        Source/PluginProcessor.cpp
-        Source/PluginEditor.cpp
-        Source/StreamSender.cpp
-        Source/WebSocketClient.cpp)
+        tests/WebSocketClient.cpp
+        ${MIXSTREAMER_SOURCES})
     target_compile_definitions(MixStreamerHeadlessTest PRIVATE
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
         JucePlugin_Name="Mix Streamer")
     target_link_libraries(MixStreamerHeadlessTest PRIVATE
+        MixStreamerWeb
         juce::juce_audio_utils juce::juce_recommended_config_flags)
 endif()

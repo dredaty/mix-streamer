@@ -9,6 +9,7 @@ namespace Colours_
     const juce::Colour text    { 0xffe7eaf0 };
     const juce::Colour dim     { 0xff8a93a3 };
     const juce::Colour accent  { 0xff33d17a };
+    const juce::Colour warn    { 0xfff5c044 };
     const juce::Colour err     { 0xffff5d5d };
 }
 using namespace Colours_;
@@ -27,8 +28,9 @@ void DarkLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, 
                                             bool over, bool down)
 {
     auto r = b.getLocalBounds().toFloat().reduced (1.0f);
-    auto c = base;
-    if (down)      c = c.brighter (0.15f);
+    auto c = b.isEnabled() ? base : panel2;
+    if (! b.isEnabled()) {}
+    else if (down)      c = c.brighter (0.15f);
     else if (over) c = c.brighter (0.07f);
     g.setColour (c);
     g.fillRoundedRectangle (r, 8.0f);
@@ -85,11 +87,6 @@ MixStreamerEditor::~MixStreamerEditor()
     setLookAndFeel (nullptr);
 }
 
-juce::File MixStreamerEditor::urlFile()
-{
-    return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile (".mix-streamer-url");
-}
-
 void MixStreamerEditor::setQuality (int index)
 {
     if (auto* param = proc.apvts.getParameter (MixStreamerProcessor::qualityParamId))
@@ -103,8 +100,8 @@ void MixStreamerEditor::setQuality (int index)
 
 void MixStreamerEditor::copyLink()
 {
-    const auto url = urlFile().loadFileAsString().trim();
-    if (url.startsWithIgnoreCase ("http"))
+    const auto url = proc.getHub().getPublicUrl();
+    if (url.isNotEmpty())
     {
         juce::SystemClipboard::copyTextToClipboard (url);
         feedbackLabel.setColour (juce::Label::textColourId, accent);
@@ -113,19 +110,35 @@ void MixStreamerEditor::copyLink()
     else
     {
         feedbackLabel.setColour (juce::Label::textColourId, err);
-        feedbackLabel.setText ("No URL yet - is the companion server running?", juce::dontSendNotification);
+        feedbackLabel.setText ("No public link yet - see status above", juce::dontSendNotification);
     }
     feedbackUntil = juce::Time::getMillisecondCounter() + 3000;
 }
 
 void MixStreamerEditor::timerCallback()
 {
-    auto& s = proc.getSender();
-    const bool c = s.isConnected();
-    const int l = s.getListenerCount();
-    if (c != connected || l != listeners)
+    auto& hub = proc.getHub();
+    juce::String text, hint;
+    juce::Colour col = warn;
+
+    if (! hub.isActive())                         { text = "Waiting for audio";  col = dim; hint = "Starts automatically when audio plays"; }
+    else if (! proc.getSender().isStreaming())    { text = "Another instance is streaming"; }
+    else switch (hub.getTunnelState())
     {
-        connected = c;
+        case TunnelState::online:        text = "Online";                col = accent; break;
+        case TunnelState::starting:      text = "Starting tunnel...";    hint = "Usually takes 3-10 s"; break;
+        case TunnelState::missingBinary: text = "cloudflared not found"; col = err; hint = "Install cloudflared or use the release build"; break;
+        case TunnelState::error:         text = "Tunnel offline - retrying"; col = err; hint = "Check internet connection"; break;
+        case TunnelState::disabled:      text = "Local only";            col = accent;
+                                         hint = "http://127.0.0.1:" + juce::String (hub.getPort()); break;
+        case TunnelState::idle:          text = "Idle";                  col = dim; break;
+    }
+
+    const int l = hub.getListenerCount();
+    if (text != statusText || col != statusColour || l != listeners)
+    {
+        statusText = text;
+        statusColour = col;
         listeners = l;
         repaint();
     }
@@ -134,12 +147,10 @@ void MixStreamerEditor::timerCallback()
     btn16.setToggleState (is16, juce::dontSendNotification);
     btn24.setToggleState (! is16, juce::dontSendNotification);
 
-    // Poll the URL file at ~1 Hz (cheap, message thread only).
-    if (urlPollCounter++ % 10 == 0)
-    {
-        const auto url = urlFile().loadFileAsString().trim();
-        linkLabel.setText (url.isNotEmpty() ? url : juce::String ("(no public URL yet)"), juce::dontSendNotification);
-    }
+    const auto url = hub.getPublicUrl();
+    linkLabel.setText (url.isNotEmpty() ? url : hint, juce::dontSendNotification);
+    copyBtn.setEnabled (url.isNotEmpty());
+    copyBtn.setColour (juce::TextButton::textColourOffId, url.isNotEmpty() ? juce::Colour (0xff06210f) : dim);
 
     if (feedbackUntil != 0 && juce::Time::getMillisecondCounter() > feedbackUntil)
     {
@@ -168,9 +179,10 @@ void MixStreamerEditor::paint (juce::Graphics& g)
     g.drawRoundedRectangle (card.reduced (0.5f), 12.0f, 1.0f);
 
     auto inner = card.reduced (16.0f, 0.0f);
-    const auto dotCol = connected ? accent : err;
+    const bool online = statusColour == accent;
+    const auto dotCol = statusColour;
     auto dot = juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ inner.getX() + 5.0f, inner.getCentreY() });
-    if (connected)
+    if (online)
     {
         g.setColour (dotCol.withAlpha (0.25f));
         g.fillEllipse (dot.expanded (4.0f));
@@ -178,15 +190,15 @@ void MixStreamerEditor::paint (juce::Graphics& g)
     g.setColour (dotCol);
     g.fillEllipse (dot);
 
+    auto countArea = inner.removeFromRight (90.0f);
     g.setColour (text);
     g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-    g.drawText (connected ? "Connected" : "Disconnected",
-                inner.withTrimmedLeft (22.0f).toNearestInt(), juce::Justification::centredLeft);
+    g.drawFittedText (statusText,
+                inner.withTrimmedLeft (22.0f).toNearestInt(), juce::Justification::centredLeft, 1, 0.8f);
 
-    g.setColour (connected ? text : dim);
+    g.setColour (online ? text : dim);
     g.setFont (juce::FontOptions (22.0f, juce::Font::bold));
-    auto countArea = inner.removeFromRight (90.0f);
-    g.drawText (connected ? juce::String (listeners) : "-", countArea.removeFromTop (card.getHeight() * 0.62f).toNearestInt(),
+    g.drawText (online ? juce::String (listeners) : "-", countArea.removeFromTop (card.getHeight() * 0.62f).toNearestInt(),
                 juce::Justification::bottomRight);
     g.setColour (dim);
     g.setFont (juce::FontOptions (10.5f));

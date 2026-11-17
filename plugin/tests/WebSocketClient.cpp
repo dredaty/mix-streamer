@@ -2,7 +2,7 @@
 
 WebSocketClient::WebSocketClient()
 {
-    rx.setSize (64 * 1024);
+    rx.setSize (1024 * 1024);
     tx.setSize (256 * 1024);
 }
 
@@ -202,13 +202,17 @@ void WebSocketClient::parseFrames()
                 if (onTextMessage)
                     onTextMessage (juce::String::fromUTF8 (reinterpret_cast<const char*> (payload), (int) len));
                 break;
+            case 0x2: // binary
+                if (onBinaryMessage)
+                    onBinaryMessage (payload, (size_t) len);
+                break;
             case 0x8: // close
                 disconnect();
                 return;
             case 0x9: // ping → pong
                 sendFrame (0xA, payload, (size_t) len);
                 break;
-            default:  // binary / pong / continuation: ignored
+            default:  // pong / continuation: ignored
                 break;
         }
         offset += hdr + (size_t) len;

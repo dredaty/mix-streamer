@@ -1,21 +1,21 @@
 #pragma once
 #include <juce_audio_basics/juce_audio_basics.h>
-#include "WebSocketClient.h"
+#include "StreamHub.h"
 #include <atomic>
 #include <vector>
 
 /**
- * Lock-free SPSC bridge between the audio thread and a background network thread.
+ * Lock-free SPSC bridge between the audio thread and a background thread.
  *
  * Audio thread:  pushStereo()   – no locks, no allocation, no system calls.
  * Sender thread: drains the FIFO, converts to 16/24-bit PCM (16-bit with TPDF dither),
- *                prefixes the 16-byte header and sends it to ws://127.0.0.1:8765/ingest.
- *                Reconnects automatically every second while the server is down.
+ *                prefixes the 16-byte header and hands ~10 ms packets to the StreamHub.
+ *                The hub (HTTP server + tunnel) is activated only once real audio flows.
  */
 class StreamSender : private juce::Thread
 {
 public:
-    StreamSender();
+    explicit StreamSender (StreamHub& hub);
     ~StreamSender() override;
 
     void start();
@@ -27,28 +27,22 @@ public:
     /** Real-time safe. Drops samples if the FIFO is full. */
     void pushStereo (const float* left, const float* right, int numSamples) noexcept;
 
-    bool isConnected() const noexcept          { return connected.load(); }
-    int  getListenerCount() const noexcept     { return listeners.load(); }
-
-    static constexpr const char* host = "127.0.0.1";
-    static constexpr int port = 8765;
+    /** True if this instance owns the stream (only one instance per process streams). */
+    bool isStreaming() const noexcept          { return hub.isSource (this); }
 
 private:
     void run() override;
     void sendAvailable (int frames);
 
-    // ~2.7 s at 192 kHz, 10.9 s at 48 kHz
-    static constexpr int fifoCapacity = 1 << 19;
+    static constexpr int fifoCapacity = 1 << 19;   // ~2.7 s at 192 kHz
     juce::AbstractFifo fifo { fifoCapacity };
-    std::vector<float> fifoData;                 // interleaved L/R, size 2 * capacity
+    std::vector<float> fifoData;                   // interleaved L/R
 
+    StreamHub& hub;
     std::atomic<juce::uint32> sampleRate { 48000 };
     std::atomic<int> bitDepth { 24 };
-    std::atomic<bool> connected { false };
-    std::atomic<int> listeners { 0 };
 
     // sender-thread-only state
-    WebSocketClient ws;
     std::vector<juce::uint8> packet;
     juce::uint32 sequence = 0;
     juce::uint32 rngState = 0x12345678;

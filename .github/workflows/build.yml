@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  CLOUDFLARED_VERSION: "2026.10.7"
+
 jobs:
   plugin:
     name: VST3 (${{ matrix.name }})
@@ -17,11 +20,13 @@ jobs:
           - name: Windows x64
             os: windows-latest
             artifact: MixStreamer-VST3-Windows-x64
-            configure: cmake -B build -A x64
+            configure: cmake -B build -A x64 -DMIXSTREAMER_BUILD_TESTS=ON
+            test: build/MixStreamerHeadlessTest_artefacts/Release/MixStreamerHeadlessTest.exe
           - name: macOS Universal
             os: macos-latest
             artifact: MixStreamer-VST3-macOS-Universal
-            configure: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+            configure: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DMIXSTREAMER_BUILD_TESTS=ON
+            test: build/MixStreamerHeadlessTest_artefacts/Release/MixStreamerHeadlessTest
     defaults:
       run:
         working-directory: plugin
@@ -35,29 +40,39 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel 4
 
-      - name: Sign ad-hoc + verify (macOS)
+      - name: Headless end-to-end test
+        env:
+          MIXSTREAMER_NO_TUNNEL: "1"
+        run: ${{ matrix.test }}
+
+      - name: Bundle cloudflared (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          RES="build/MixStreamer_artefacts/Release/VST3/Mix Streamer.vst3/Contents/Resources"
+          mkdir -p "$RES"
+          curl -fsSL -o "$RES/cloudflared.exe" \
+            "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/cloudflared-windows-amd64.exe"
+          ls -la "$RES"
+
+      - name: Bundle cloudflared (macOS universal) + ad-hoc sign
         if: runner.os == 'macOS'
         run: |
           BUNDLE="build/MixStreamer_artefacts/Release/VST3/Mix Streamer.vst3"
+          RES="$BUNDLE/Contents/Resources"
+          mkdir -p "$RES" cf
+          for a in arm64 amd64; do
+            curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/cloudflared-darwin-$a.tgz" | tar -xz -C cf
+            mv cf/cloudflared "cf/cloudflared-$a"
+          done
+          lipo -create cf/cloudflared-arm64 cf/cloudflared-amd64 -output "$RES/cloudflared"
+          chmod +x "$RES/cloudflared"
+          codesign --force --sign - "$RES/cloudflared"
           codesign --force --deep --sign - "$BUNDLE"
-          lipo -info "$BUNDLE/Contents/MacOS/Mix Streamer"
+          lipo -info "$BUNDLE/Contents/MacOS/Mix Streamer" "$RES/cloudflared"
+          codesign --verify --deep --strict "$BUNDLE"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: plugin/build/MixStreamer_artefacts/Release/VST3/
           if-no-files-found: error
-
-  server:
-    name: Server selftest
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm ci
-      - run: npm test

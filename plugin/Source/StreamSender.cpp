@@ -5,7 +5,6 @@ namespace
 {
     constexpr int headerSize = 16;
     constexpr int maxFramesPerPacket = 4096;
-    constexpr juce::uint32 reconnectIntervalMs = 1000;
 
     inline void putU32 (juce::uint8* p, juce::uint32 v) noexcept
     {
@@ -14,17 +13,10 @@ namespace
     }
 }
 
-StreamSender::StreamSender() : juce::Thread ("MixStreamer Sender")
+StreamSender::StreamSender (StreamHub& h) : juce::Thread ("MixStreamer Sender"), hub (h)
 {
     fifoData.resize ((size_t) fifoCapacity * 2, 0.0f);
     packet.resize (headerSize + (size_t) maxFramesPerPacket * 2 * 3);
-
-    ws.onTextMessage = [this] (const juce::String& text)
-    {
-        const auto v = juce::JSON::parse (text);
-        if (v.getProperty ("type", {}).toString() == "listeners")
-            listeners.store ((int) v.getProperty ("count", 0));
-    };
 }
 
 StreamSender::~StreamSender() { stop(); }
@@ -40,6 +32,7 @@ void StreamSender::stop()
     signalThreadShouldExit();
     notify();
     stopThread (3000);
+    hub.releaseSource (this);
 }
 
 void StreamSender::pushStereo (const float* left, const float* right, int numSamples) noexcept
@@ -62,49 +55,41 @@ void StreamSender::pushStereo (const float* left, const float* right, int numSam
 
 void StreamSender::run()
 {
-    juce::uint32 lastAttempt = 0;
+    juce::uint32 audioSince = 0;
 
     while (! threadShouldExit())
     {
-        if (! ws.isConnected())
+        const int sr = (int) sampleRate.load();
+        const int chunk = juce::jlimit (64, maxFramesPerPacket, sr / 100);  // ~10 ms packets
+        const int ready = fifo.getNumReady();
+
+        // Activate server + tunnel only after ~0.5 s of continuous audio, so that
+        // plug-in scans / short instantiations never start anything.
+        if (! hub.isActive())
         {
-            connected.store (false);
-            listeners.store (0);
-
-            // Discard audio while offline so no stale backlog builds up.
-            fifo.read (fifo.getNumReady());
-
-            const auto now = juce::Time::getMillisecondCounter();
-            if (now - lastAttempt >= reconnectIntervalMs || lastAttempt == 0)
+            if (ready > 0)
             {
-                lastAttempt = now;
-                if (ws.connect (host, port, "/ingest", 300))
-                {
-                    fifo.read (fifo.getNumReady()); // start fresh
-                    connected.store (true);
-                    continue;
-                }
+                if (audioSince == 0) audioSince = juce::Time::getMillisecondCounter();
+                if (juce::Time::getMillisecondCounter() - audioSince > 500)
+                    hub.activate();
             }
-            wait (50);
+            fifo.read (ready);  // discard
+            wait (20);
             continue;
         }
 
-        if (! ws.poll())
+        if (! hub.isSource (this) && ! hub.claimSource (this))
+        {
+            fifo.read (ready);  // another instance is streaming
+            wait (50);
             continue;
-
-        // ~10 ms per packet: good balance between latency and overhead.
-        const int sr = (int) sampleRate.load();
-        const int chunk = juce::jlimit (64, maxFramesPerPacket, sr / 100);
-        const int ready = fifo.getNumReady();
+        }
 
         if (ready >= chunk)
             sendAvailable (juce::jmin (ready, maxFramesPerPacket));
         else
             wait (2);
     }
-
-    ws.disconnect();
-    connected.store (false);
 }
 
 void StreamSender::sendAvailable (int frames)
@@ -159,6 +144,5 @@ void StreamSender::sendAvailable (int frames)
     convert (scope.startIndex2, scope.blockSize2);
 
     const size_t total = headerSize + (size_t) frames * 2 * (size_t) bytesPerSample;
-    if (! ws.sendBinary (p, total))
-        connected.store (false);
+    hub.publish (this, std::make_shared<const juce::MemoryBlock> (p, total), sampleRate.load(), bits);
 }

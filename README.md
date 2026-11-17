@@ -1,72 +1,69 @@
 # Mix Streamer
 
-VST3 plugin, ktorý posiela stereo výstup z DAW ako nekomprimované PCM (16/24-bit) cez lokálny relay server a Cloudflare Tunnel do webového prehrávača klienta.
+All-in-one VST3 plugin na počúvanie mixu na diaľku: nekomprimované PCM 16/24-bit cez Cloudflare Tunnel do webového prehrávača. Klient nič neinštaluje.
 
 ```
-DAW ─ VST3 ─ ws://127.0.0.1:8765/ingest ─ server ─ :3000 (web + /listen) ─ cloudflared ─ https://…trycloudflare.com ─ prehliadač
+DAW → Mix Streamer.vst3 ─┬─ lock-free FIFO → sender thread → PCM pakety (10 ms)
+                         ├─ HTTP/WebSocket server 127.0.0.1:<náhodný port>  (web prehrávač + /listen)
+                         └─ cloudflared (zabalený v plugine) → https://….trycloudflare.com → prehliadač
 ```
 
-## Server (`server/`)
+## Inštalácia
 
-Požiadavky: Node.js ≥ 18, `cloudflared` v PATH
-(macOS: `brew install cloudflared`, Windows: `winget install --id Cloudflare.cloudflared`).
+Hotové buildy: GitHub → **Actions** → posledný úspešný beh **Build** → *Artifacts*.
+
+| Systém | Artefakt | Kam skopírovať priečinok `Mix Streamer.vst3` |
+|---|---|---|
+| Windows | `MixStreamer-VST3-Windows-x64` | `C:\Program Files\Common Files\VST3\` |
+| macOS | `MixStreamer-VST3-macOS-Universal` | `~/Library/Audio/Plug-Ins/VST3/` |
+
+Na macOS plugin nie je notarizovaný. Po skopírovaní spusti:
 
 ```bash
-cd server
-npm install
-npm run build
-npm start
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Mix Streamer.vst3"
 ```
 
-Verejná URL sa vypíše do konzoly a uloží do `~/.mix-streamer-url` (Windows: `%USERPROFILE%\.mix-streamer-url`).
-
-| Príkaz / premenná | Popis |
-|---|---|
-| `npm run start:local` | bez tunela, do súboru sa zapíše LAN URL `http://<ip>:3000` |
-| `npm test` | end-to-end selftest (server + testovací zdroj + listener) |
-| `node dist/fake-source.js 48000 24` | testovací sínus namiesto DAW |
-| `WEB_PORT`, `INGEST_PORT` | porty (default 3000 / 8765) |
-| `CLOUDFLARED_BIN` | cesta k `cloudflared`, ak nie je v PATH |
-| `TUNNEL_DEBUG=1`, `STATS=1` | log cloudflared / štatistiky prenosu |
-
-## Plugin (`plugin/`)
-
-JUCE 8.0.15 sa stiahne automaticky cez CMake FetchContent (prvý configure trvá dlhšie).
-
-**macOS** (Universal Binary arm64 + x86_64, Xcode Command Line Tools + CMake ≥ 3.22):
-
-```bash
-cd plugin
-cmake -B build -G Xcode
-cmake --build build --config Release
-```
-
-Výstup: `build/MixStreamer_artefacts/Release/VST3/Mix Streamer.vst3` → kopírovať do `~/Library/Audio/Plug-Ins/VST3/`.
-
-**Windows** (Visual Studio 2022, x64):
-
-```bash
-cd plugin
-cmake -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
-```
-
-Výstup: `build\MixStreamer_artefacts\Release\VST3\Mix Streamer.vst3` → kopírovať do `C:\Program Files\Common Files\VST3\`.
-
-Voliteľné: `-DMIXSTREAMER_COPY_PLUGIN=ON` (automatická inštalácia po builde, na Windows vyžaduje admin), `-DMIXSTREAMER_BUILD_TESTS=ON` (headless test `MixStreamerHeadlessTest`, potrebuje bežiaci server).
+`cloudflared` je priamo v plugine (`Contents/Resources`). Netreba Node.js ani žiadny server.
 
 ## Použitie
 
-1. Spusti server (`npm start`), počkaj na `PUBLIC LISTEN URL`.
-2. Vlož **Mix Streamer** na master bus (ako posledný insert).
-3. V plugine: *Connected*, zvoľ 16/24-bit, **Copy Link** a pošli link klientovi.
-4. Klient otvorí link, stlačí Play; pri slabom pripojení zvolí High (500 ms).
+1. Vlož **Mix Streamer** na master bus ako posledný insert.
+2. Spusti prehrávanie. Po ~0,5 s audia sa spustí server a tunel; stav prejde *Starting tunnel…* → *Online* (3–10 s).
+3. **Copy Link** a pošli link klientovi. Klient stlačí Play; pri slabom pripojení zvolí High (500 ms).
+
+Stavy pluginu: *Waiting for audio* (nič nebeží), *Starting tunnel…*, *Online*, *Tunnel offline – retrying* (bez internetu, opakuje s back-off), *cloudflared not found*, *Another instance is streaming* (streamuje vždy len jedna inštancia).
+
+Log tunela: `%TEMP%\mix-streamer-cloudflared.log` / `$TMPDIR/mix-streamer-cloudflared.log`.
+
+## Build zo zdrojákov
+
+JUCE 8.0.15 sa stiahne cez CMake FetchContent.
+
+```bash
+cd plugin
+```
+
+macOS (Universal arm64 + x86_64):
+
+```bash
+cmake -B build -G Xcode && cmake --build build --config Release
+```
+
+Windows (Visual Studio 2022):
+
+```bash
+cmake -B build -A x64 && cmake --build build --config Release
+```
+
+Lokálny build neobsahuje `cloudflared` – plugin ho potom hľadá v systéme (winget / Homebrew / PATH), alebo v `MIXSTREAMER_CLOUDFLARED`.
+
+Testy: `-DMIXSTREAMER_BUILD_TESTS=ON`, potom `MixStreamerHeadlessTest` (s `MIXSTREAMER_NO_TUNNEL=1` bez tunela; `--serve 60` streamuje testovací sínus pre skúšku v prehliadači).
 
 ## Poznámky
 
-- Bitrate: 48 kHz/24-bit ≈ 2,3 Mbit/s, 16-bit ≈ 1,5 Mbit/s na poslucháča (bez kompresie).
-- 16-bit používa TPDF dither. 24-bit je bit-exact (overené testom).
-- Prehrávač kompenzuje drift hodín DAW vs. klient úpravou pomeru prevzorkovania o max. ±0,2 %; ak sa sample rate streamu a zvukovky klienta líšia, prevzorkuje (Hermite).
-- Quick tunnel (`trycloudflare.com`) dostane pri každom štarte novú URL. Pre stálu URL treba named tunnel na vlastnej doméne.
-- Aktívny je vždy len jeden zdroj – ďalšia inštancia pluginu nahradí predchádzajúcu.
-- Bez autentifikácie: kto má link, počúva.
+- Bitrate na poslucháča: 48 kHz/24-bit ≈ 2,3 Mbit/s, 16-bit ≈ 1,5 Mbit/s.
+- 16-bit s TPDF ditherom, 24-bit bit-exact.
+- Prehrávač kompenzuje drift hodín DAW/klient (±0,2 %) a v prípade potreby prevzorkuje (Hermite).
+- Quick tunnel dostane pri každom spustení novú URL. Stála URL = named tunnel na vlastnej doméne (zatiaľ neimplementované).
+- Bez autentifikácie – kto má link, počúva.
+- Server počúva len na 127.0.0.1, z LAN nie je dostupný; von ide výhradne cez tunel.

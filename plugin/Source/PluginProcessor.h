@@ -34,13 +34,15 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     StreamSender& getSender() noexcept { return sender; }
+    StreamHub& getHub() noexcept { return *hub; }
 
     static constexpr const char* qualityParamId = "quality";
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
-    StreamSender sender;
+    juce::SharedResourcePointer<StreamHub> hub;   // must outlive sender
+    StreamSender sender { *hub };
     std::atomic<float>* qualityParam = nullptr;   // 0 = 16-bit, 1 = 24-bit
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixStreamerProcessor)

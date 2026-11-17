@@ -26,7 +26,6 @@ private:
     void timerCallback() override;
     void setQuality (int index);
     void copyLink();
-    static juce::File urlFile();
 
     MixStreamerProcessor& proc;
     DarkLookAndFeel lnf;
@@ -34,10 +33,10 @@ private:
     juce::TextButton btn16 { "16-bit" }, btn24 { "24-bit" }, copyBtn { "Copy Link" };
     juce::Label linkLabel, feedbackLabel;
 
-    bool connected = false;
-    int listeners = 0;
+    juce::String statusText;
+    juce::Colour statusColour;
+    int listeners = -1;
     juce::uint32 feedbackUntil = 0;
-    int urlPollCounter = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixStreamerEditor)
 };

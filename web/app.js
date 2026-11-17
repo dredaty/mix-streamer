@@ -87,7 +87,7 @@
   function setButton() {
     $("play").classList.toggle("stop", playing);
     $("play").setAttribute("aria-label", playing ? "Stop" : "Play");
-    $("icoPlay").hidden = playing; $("icoStop").hidden = !playing;
+    $("icoPlay").toggleAttribute("hidden", playing); $("icoStop").toggleAttribute("hidden", !playing);
   }
   const msg = (t) => ($("msg").textContent = t);
 
