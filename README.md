@@ -17,12 +17,8 @@ Hotové buildy: GitHub → **Actions** → posledný úspešný beh **Build** �
 - Windows: SmartScreen → *Ďalšie informácie* → *Spustiť aj tak*.
 - macOS: dvojklik → hlásenie o neznámom vývojárovi → *Systémové nastavenia → Súkromie a bezpečnosť → Otvoriť aj tak*.
 
-**Ručne:**
+**Ručne:** samotný `Samov Streamer.vst3` je vo vnútri inštalátora; ak ho treba bez inštalátora, zostav ho podľa časti *Build zo zdrojákov*.
 
-| Systém | Artefakt | Kam skopírovať priečinok `Samov Streamer.vst3` |
-|---|---|---|
-| Windows | `SamovStreamer-VST3-Windows-x64` | `C:\Program Files\Common Files\VST3\` |
-| macOS | `SamovStreamer-VST3-macOS-Universal` | `~/Library/Audio/Plug-Ins/VST3/` |
 
 Pri aktualizácii z verzie „Mix Streamer“ najprv zmaž starý priečinok `Mix Streamer.vst3` (plugin má rovnaké ID, projekty ostávajú kompatibilné).
 

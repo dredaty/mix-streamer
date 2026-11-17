@@ -3,8 +3,13 @@ name: Build
 on:
   push:
     branches: [main]
-  pull_request:
+    paths-ignore: ["**.md"]          # README changes don't need a build
   workflow_dispatch:
+
+# a newer push cancels the build still running for an older one (saves minutes)
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CLOUDFLARED_VERSION: "2026.10.7"
@@ -94,14 +99,11 @@ jobs:
           ../installer/macos/build-pkg.sh "build/MixStreamer_artefacts/Release/VST3/Samov Streamer.vst3" "$APP_VERSION" ../dist
           ls -la ../dist
 
+      # Only the installers are uploaded (the .vst3 is inside), kept 30 days:
+      # the free plan has 500 MB of artifact storage.
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.installer }}
           path: dist/*
           if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: plugin/build/MixStreamer_artefacts/Release/VST3/*.vst3
-          if-no-files-found: error
+          retention-days: 30
