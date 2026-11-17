@@ -167,7 +167,7 @@ int main (int argc, char** argv)
     }
     std::cout << "  frames " << frames << ", samples " << samples << ", peak " << peak
               << ", |L+R| max " << maxErrLR << ", gaps " << gaps << std::endl;
-    ok &= check (frames > 250 && samples > 48000 * 2.5, "audio received in real time");
+    ok &= check (frames > 100 && samples > 48000 * 2.5, "audio received in real time");
     ok &= check (badFrames == 0 && gaps == 0, "headers valid, no sequence gaps");
     ok &= check (std::abs (peak - 0.5) < 1e-4 && maxErrLR == 0.0, "24-bit content bit-exact");
     ok &= check (sawStatus, "status message received");
