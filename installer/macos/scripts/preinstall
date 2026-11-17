@@ -1,0 +1,15 @@
+#!/bin/sh
+# Remove previous versions (old name "Mix Streamer" and existing Samov Streamer),
+# both system-wide and in the logged-in user's library, so there are no duplicates.
+SYS="/Library/Audio/Plug-Ins/VST3"
+rm -rf "$SYS/Mix Streamer.vst3" "$SYS/Samov Streamer.vst3"
+
+CONSOLE_USER=$(stat -f%Su /dev/console 2>/dev/null)
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+  HOME_DIR=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+  if [ -n "$HOME_DIR" ]; then
+    rm -rf "$HOME_DIR/Library/Audio/Plug-Ins/VST3/Mix Streamer.vst3" \
+           "$HOME_DIR/Library/Audio/Plug-Ins/VST3/Samov Streamer.vst3"
+  fi
+fi
+exit 0

@@ -12,6 +12,13 @@ DAW → Samov Streamer.vst3 ─┬─ lock-free FIFO → sender thread → PCM p
 
 Hotové buildy: GitHub → **Actions** → posledný úspešný beh **Build** → *Artifacts*.
 
+**Inštalátor (odporúčané):** `SamovStreamer-Setup-Windows` (.exe) / `SamovStreamer-Installer-macOS` (.pkg) – dvojklik, plugin sa nainštaluje do systémového VST3 priečinka a stará verzia sa odstráni. Inštalátory nie sú podpísané:
+
+- Windows: SmartScreen → *Ďalšie informácie* → *Spustiť aj tak*.
+- macOS: dvojklik → hlásenie o neznámom vývojárovi → *Systémové nastavenia → Súkromie a bezpečnosť → Otvoriť aj tak*.
+
+**Ručne:**
+
 | Systém | Artefakt | Kam skopírovať priečinok `Samov Streamer.vst3` |
 |---|---|---|
 | Windows | `SamovStreamer-VST3-Windows-x64` | `C:\Program Files\Common Files\VST3\` |

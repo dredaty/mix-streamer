@@ -20,11 +20,13 @@ jobs:
           - name: Windows x64
             os: windows-latest
             artifact: SamovStreamer-VST3-Windows-x64
+            installer: SamovStreamer-Setup-Windows
             configure: cmake -B build -A x64 -DMIXSTREAMER_BUILD_TESTS=ON
             test: build/MixStreamerHeadlessTest_artefacts/Release/MixStreamerHeadlessTest.exe
           - name: macOS Universal
             os: macos-latest
             artifact: SamovStreamer-VST3-macOS-Universal
+            installer: SamovStreamer-Installer-macOS
             configure: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DMIXSTREAMER_BUILD_TESTS=ON
             test: build/MixStreamerHeadlessTest_artefacts/Release/MixStreamerHeadlessTest
     defaults:
@@ -70,6 +72,33 @@ jobs:
           codesign --force --deep --sign - "$BUNDLE"
           lipo -info "$BUNDLE/Contents/MacOS/Samov Streamer" "$RES/cloudflared"
           codesign --verify --deep --strict "$BUNDLE"
+
+      - name: Read version
+        run: echo "APP_VERSION=$(sed -nE 's/^project\(MixStreamer VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)" >> "$GITHUB_ENV"
+
+      - name: Build installer (Windows, Inno Setup)
+        if: runner.os == 'Windows'
+        env:
+          MSYS2_ARG_CONV_EXCL: "*"
+        run: |
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [ ! -f "$ISCC" ]; then choco install innosetup -y --no-progress; fi
+          SRC=$(cygpath -w "$PWD/build/MixStreamer_artefacts/Release/VST3/Samov Streamer.vst3")
+          "$ISCC" /Q "/DAppVersion=$APP_VERSION" "/DSourceDir=$SRC" "$(cygpath -w ../installer/windows/SamovStreamer.iss)"
+          mkdir -p ../dist && mv ../installer/windows/output/*.exe ../dist/
+          ls -la ../dist
+
+      - name: Build installer (macOS, pkg)
+        if: runner.os == 'macOS'
+        run: |
+          ../installer/macos/build-pkg.sh "build/MixStreamer_artefacts/Release/VST3/Samov Streamer.vst3" "$APP_VERSION" ../dist
+          ls -la ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.installer }}
+          path: dist/*
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:
