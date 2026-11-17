@@ -11,7 +11,14 @@ cp -R "$BUNDLE" "$WORK/root/Library/Audio/Plug-Ins/VST3/"
 
 # Never let Installer "relocate" the bundle to wherever an old copy with the same id lives.
 pkgbuild --analyze --root "$WORK/root" "$WORK/component.plist"
-/usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$WORK/component.plist"
+PB=/usr/libexec/PlistBuddy
+i=0
+while $PB -c "Print :$i" "$WORK/component.plist" >/dev/null 2>&1; do
+  $PB -c "Set :$i:BundleIsRelocatable false" "$WORK/component.plist" 2>/dev/null \
+    || $PB -c "Add :$i:BundleIsRelocatable bool false" "$WORK/component.plist"
+  i=$((i + 1))
+done
+echo "component plist ($i entries):"; cat "$WORK/component.plist"
 
 pkgbuild --root "$WORK/root" \
          --component-plist "$WORK/component.plist" \
