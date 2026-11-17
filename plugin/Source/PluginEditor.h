@@ -29,6 +29,7 @@ private:
 
     MixStreamerProcessor& proc;
     DarkLookAndFeel lnf;
+    std::unique_ptr<juce::Drawable> logo;
 
     juce::TextButton btn16 { "16-bit" }, btn24 { "24-bit" }, copyBtn { "Copy Link" };
     juce::Label linkLabel, feedbackLabel;

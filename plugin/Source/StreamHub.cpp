@@ -73,7 +73,7 @@ namespace
     juce::String tunnelLogPath()
     {
         return juce::File::getSpecialLocation (juce::File::tempDirectory)
-                   .getChildFile ("mix-streamer-cloudflared.log").getFullPathName();
+                   .getChildFile ("samov-streamer-cloudflared.log").getFullPathName();
     }
 }
 
@@ -575,6 +575,7 @@ void StreamHub::handleConnection (std::unique_ptr<juce::StreamingSocket> sock)
         { "/index.html", BinaryData::index_html, BinaryData::index_htmlSize, "text/html; charset=utf-8" },
         { "/app.js",     BinaryData::app_js,     BinaryData::app_jsSize,     "text/javascript; charset=utf-8" },
         { "/worklet.js", BinaryData::worklet_js, BinaryData::worklet_jsSize, "text/javascript; charset=utf-8" },
+        { "/logo.svg",   BinaryData::logo_svg,   BinaryData::logo_svgSize,   "image/svg+xml" },
     };
     for (auto& f : files)
         if (path == f.path)

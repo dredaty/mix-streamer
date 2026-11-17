@@ -8,7 +8,7 @@ if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
 endif()
 
-project(MixStreamer VERSION 1.0.0 LANGUAGES C CXX)
+project(MixStreamer VERSION 1.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -34,12 +34,12 @@ FetchContent_MakeAvailable(JUCE)
 
 # ------------------------------------------------------------------ plug-in
 juce_add_plugin(MixStreamer
-    COMPANY_NAME                "MixStreamer"
-    BUNDLE_ID                   "com.mixstreamer.plugin"
+    COMPANY_NAME                "Samo Pospisil"
+    BUNDLE_ID                   "com.samopospisil.samovstreamer"
     PLUGIN_MANUFACTURER_CODE    Mxsr
     PLUGIN_CODE                 MxSt
     FORMATS                     VST3
-    PRODUCT_NAME                "Mix Streamer"
+    PRODUCT_NAME                "Samov Streamer"
     IS_SYNTH                    FALSE
     NEEDS_MIDI_INPUT            FALSE
     NEEDS_MIDI_OUTPUT           FALSE
@@ -55,7 +55,8 @@ juce_add_binary_data(MixStreamerWeb
     SOURCES
         ../web/index.html
         ../web/app.js
-        ../web/worklet.js)
+        ../web/worklet.js
+        ../web/logo.svg)
 
 set(MIXSTREAMER_SOURCES
     Source/PluginProcessor.cpp
@@ -91,7 +92,7 @@ if(MIXSTREAMER_BUILD_TESTS)
         ${MIXSTREAMER_SOURCES})
     target_compile_definitions(MixStreamerHeadlessTest PRIVATE
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
-        JucePlugin_Name="Mix Streamer")
+        JucePlugin_Name="Samov Streamer")
     target_link_libraries(MixStreamerHeadlessTest PRIVATE
         MixStreamerWeb
         juce::juce_audio_utils juce::juce_recommended_config_flags)

@@ -1,9 +1,9 @@
-# Mix Streamer
+# Samov Streamer
 
 All-in-one VST3 plugin na počúvanie mixu na diaľku: nekomprimované PCM 16/24-bit cez Cloudflare Tunnel do webového prehrávača. Klient nič neinštaluje.
 
 ```
-DAW → Mix Streamer.vst3 ─┬─ lock-free FIFO → sender thread → PCM pakety (10 ms)
+DAW → Samov Streamer.vst3 ─┬─ lock-free FIFO → sender thread → PCM pakety (10 ms)
                          ├─ HTTP/WebSocket server 127.0.0.1:<náhodný port>  (web prehrávač + /listen)
                          └─ cloudflared (zabalený v plugine) → https://….trycloudflare.com → prehliadač
 ```
@@ -12,28 +12,30 @@ DAW → Mix Streamer.vst3 ─┬─ lock-free FIFO → sender thread → PCM pak
 
 Hotové buildy: GitHub → **Actions** → posledný úspešný beh **Build** → *Artifacts*.
 
-| Systém | Artefakt | Kam skopírovať priečinok `Mix Streamer.vst3` |
+| Systém | Artefakt | Kam skopírovať priečinok `Samov Streamer.vst3` |
 |---|---|---|
-| Windows | `MixStreamer-VST3-Windows-x64` | `C:\Program Files\Common Files\VST3\` |
-| macOS | `MixStreamer-VST3-macOS-Universal` | `~/Library/Audio/Plug-Ins/VST3/` |
+| Windows | `SamovStreamer-VST3-Windows-x64` | `C:\Program Files\Common Files\VST3\` |
+| macOS | `SamovStreamer-VST3-macOS-Universal` | `~/Library/Audio/Plug-Ins/VST3/` |
+
+Pri aktualizácii z verzie „Mix Streamer“ najprv zmaž starý priečinok `Mix Streamer.vst3` (plugin má rovnaké ID, projekty ostávajú kompatibilné).
 
 Na macOS plugin nie je notarizovaný. Po skopírovaní spusti:
 
 ```bash
-xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Mix Streamer.vst3"
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Samov Streamer.vst3"
 ```
 
 `cloudflared` je priamo v plugine (`Contents/Resources`). Netreba Node.js ani žiadny server.
 
 ## Použitie
 
-1. Vlož **Mix Streamer** na master bus ako posledný insert.
+1. Vlož **Samov Streamer** na master bus ako posledný insert.
 2. Spusti prehrávanie. Po ~0,5 s audia sa spustí server a tunel; stav prejde *Starting tunnel…* → *Online* (3–10 s).
 3. **Copy Link** a pošli link klientovi. Klient stlačí Play; pri slabom pripojení zvolí High (500 ms).
 
 Stavy pluginu: *Waiting for audio* (nič nebeží), *Starting tunnel…*, *Online*, *Tunnel offline – retrying* (bez internetu, opakuje s back-off), *cloudflared not found*, *Another instance is streaming* (streamuje vždy len jedna inštancia).
 
-Log tunela: `%TEMP%\mix-streamer-cloudflared.log` / `$TMPDIR/mix-streamer-cloudflared.log`.
+Log tunela: `%TEMP%\samov-streamer-cloudflared.log` / `$TMPDIR/samov-streamer-cloudflared.log`.
 
 ## Build zo zdrojákov
 

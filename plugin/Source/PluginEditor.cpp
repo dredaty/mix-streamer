@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "BinaryData.h"
 
 namespace Colours_
 {
@@ -8,19 +9,23 @@ namespace Colours_
     const juce::Colour line    { 0xff262c37 };
     const juce::Colour text    { 0xffe7eaf0 };
     const juce::Colour dim     { 0xff8a93a3 };
-    const juce::Colour accent  { 0xff33d17a };
+    const juce::Colour accent  { 0xff33d17a };   // status only
+    const juce::Colour brand   { 0xffeef0f4 };   // buttons (logo is black/white)
+    const juce::Colour ink     { 0xff111317 };
     const juce::Colour warn    { 0xfff5c044 };
     const juce::Colour err     { 0xffff5d5d };
 }
 using namespace Colours_;
 
+static constexpr int headerH = 44;
+
 //============================================================================== LookAndFeel
 DarkLookAndFeel::DarkLookAndFeel()
 {
     setColour (juce::TextButton::buttonColourId, panel2);
-    setColour (juce::TextButton::buttonOnColourId, accent);
+    setColour (juce::TextButton::buttonOnColourId, brand);
     setColour (juce::TextButton::textColourOffId, dim);
-    setColour (juce::TextButton::textColourOnId, juce::Colour (0xff06210f));
+    setColour (juce::TextButton::textColourOnId, ink);
     setColour (juce::Label::textColourId, text);
 }
 
@@ -51,6 +56,7 @@ MixStreamerEditor::MixStreamerEditor (MixStreamerProcessor& p)
     : AudioProcessorEditor (&p), proc (p)
 {
     setLookAndFeel (&lnf);
+    logo = juce::Drawable::createFromImageData (BinaryData::logo_svg, BinaryData::logo_svgSize);
 
     for (auto* b : { &btn16, &btn24 })
     {
@@ -62,8 +68,8 @@ MixStreamerEditor::MixStreamerEditor (MixStreamerProcessor& p)
     btn16.onClick = [this] { setQuality (0); };
     btn24.onClick = [this] { setQuality (1); };
 
-    copyBtn.setColour (juce::TextButton::buttonColourId, accent);
-    copyBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff06210f));
+    copyBtn.setColour (juce::TextButton::buttonColourId, brand);
+    copyBtn.setColour (juce::TextButton::textColourOffId, ink);
     copyBtn.onClick = [this] { copyLink(); };
     addAndMakeVisible (copyBtn);
 
@@ -76,7 +82,7 @@ MixStreamerEditor::MixStreamerEditor (MixStreamerProcessor& p)
     feedbackLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (feedbackLabel);
 
-    setSize (380, 260);
+    setSize (380, 280);
     timerCallback();
     startTimerHz (10);
 }
@@ -150,7 +156,7 @@ void MixStreamerEditor::timerCallback()
     const auto url = hub.getPublicUrl();
     linkLabel.setText (url.isNotEmpty() ? url : hint, juce::dontSendNotification);
     copyBtn.setEnabled (url.isNotEmpty());
-    copyBtn.setColour (juce::TextButton::textColourOffId, url.isNotEmpty() ? juce::Colour (0xff06210f) : dim);
+    copyBtn.setColour (juce::TextButton::textColourOffId, url.isNotEmpty() ? ink : dim);
 
     if (feedbackUntil != 0 && juce::Time::getMillisecondCounter() > feedbackUntil)
     {
@@ -164,11 +170,18 @@ void MixStreamerEditor::paint (juce::Graphics& g)
     g.fillAll (bg);
     auto area = getLocalBounds().reduced (16);
 
-    // Title
-    auto top = area.removeFromTop (28);
+    // Header: logo + name
+    auto top = area.removeFromTop (headerH);
+    if (logo != nullptr)
+        logo->drawWithin (g, top.removeFromLeft (headerH).toFloat(), juce::RectanglePlacement::centred, 1.0f);
+    top.removeFromLeft (10);
     g.setColour (text);
     g.setFont (juce::FontOptions (17.0f, juce::Font::bold));
-    g.drawText ("MIX STREAMER", top, juce::Justification::centredLeft);
+    g.drawText ("SAMOV STREAMER", top.removeFromTop (headerH / 2 + 2), juce::Justification::bottomLeft);
+    g.setColour (dim);
+    g.setFont (juce::FontOptions (11.5f));
+    g.drawText (juce::String::fromUTF8 ("Samo Posp\xc3\xad\xc5\xa1il  \xc2\xb7  sound / mix / master"),
+                top.withTrimmedTop (2), juce::Justification::topLeft);
 
     // Status card
     area.removeFromTop (10);
@@ -207,14 +220,14 @@ void MixStreamerEditor::paint (juce::Graphics& g)
     // Section label
     g.setColour (dim);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("STREAM QUALITY", getLocalBounds().reduced (16).withTop (16 + 28 + 10 + 58 + 12).withHeight (14),
+    g.drawText ("STREAM QUALITY", getLocalBounds().reduced (16).withTop (16 + headerH + 10 + 58 + 12).withHeight (14),
                 juce::Justification::centredLeft);
 }
 
 void MixStreamerEditor::resized()
 {
     auto area = getLocalBounds().reduced (16);
-    area.removeFromTop (28 + 10 + 58 + 12 + 14 + 6);
+    area.removeFromTop (headerH + 10 + 58 + 12 + 14 + 6);
 
     auto row = area.removeFromTop (36);
     btn16.setBounds (row.removeFromLeft (row.getWidth() / 2));
