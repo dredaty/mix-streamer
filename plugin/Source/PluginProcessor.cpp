@@ -22,7 +22,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MixStreamerProcessor::create
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID { qualityParamId, 1 }, "Stream Quality",
-        juce::StringArray { "16-bit PCM", "24-bit PCM" }, 1));
+        juce::StringArray { "16-bit PCM", "24-bit PCM" }, 0));   // 16-bit default: safer on weak connections
     return layout;
 }
 

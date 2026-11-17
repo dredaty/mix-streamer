@@ -60,7 +60,7 @@ void StreamSender::run()
     while (! threadShouldExit())
     {
         const int sr = (int) sampleRate.load();
-        const int chunk = juce::jlimit (64, maxFramesPerPacket, sr / 100);  // ~10 ms packets
+        const int chunk = juce::jlimit (64, maxFramesPerPacket, sr / 50);   // ~20 ms packets
         const int ready = fifo.getNumReady();
 
         // Activate server + tunnel only after ~0.5 s of continuous audio, so that

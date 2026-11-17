@@ -28,7 +28,7 @@ class StreamPlayer extends AudioWorkletProcessor {
 
     this.port.onmessage = (e) => {
       const m = e.data;
-      if (m.type === "data") this.push(m.samples);
+      if (m.type === "data") this.push(m.samples, m.gap);
       else if (m.type === "format") this.setFormat(m.sampleRate);
       else if (m.type === "latency") { this.targetMs = m.ms; this.rebuffer(); }
       else if (m.type === "reset") this.rebuffer(true);
@@ -58,9 +58,20 @@ class StreamPlayer extends AudioWorkletProcessor {
   get targetFrames() { return (this.targetMs / 1000) * this.srcRate; }
   fill() { return this.writePos - this.readPos - this.frac; }
 
-  push(s) {
+  push(s, gap) {
     const frames = s.length >> 1;
     const cap = this.capacity;
+    const XF = 96; // ~2 ms splice crossfade
+    if (gap && this.writePos > 0) {
+      // packets were lost: fade out the unread tail, fade in the new data → soft dip, no click
+      const n = Math.min(XF, Math.max(0, this.writePos - this.readPos - 4));
+      for (let k = 0; k < n; k++) {
+        const w = ((this.writePos - 1 - k) % cap) * 2, g = k / n;
+        this.buf[w] *= g; this.buf[w + 1] *= g;
+      }
+      const m = Math.min(XF, frames);
+      for (let k = 0; k < m; k++) { const g = k / m; s[2 * k] *= g; s[2 * k + 1] *= g; }
+    }
     for (let i = 0; i < frames; i++) {
       const w = (this.writePos % cap) * 2;
       this.buf[w] = s[2 * i];
@@ -129,6 +140,9 @@ class StreamPlayer extends AudioWorkletProcessor {
         if (ch === 0) L[i] = v * this.gain; else if (R !== L) R[i] = v * this.gain;
       }
       if (this.gain < 1) this.gain = Math.min(1, this.gain + 1 / 256);
+      // running dry: fade out over the last frames so an underrun doesn't click
+      const left = this.writePos - this.readPos;
+      if (left < 96 && this.gain > left / 96) this.gain = left / 96;
       this.frac += step;
       const adv = Math.floor(this.frac);
       this.readPos += adv;

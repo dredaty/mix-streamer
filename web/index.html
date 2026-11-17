@@ -40,6 +40,8 @@
   #play svg { width: 48px; height: 48px; }
   #msg { color: var(--dim); font-size: 14px; min-height: 20px; text-align: center; }
 
+  .warn { background: rgba(245,192,68,.12); border: 1px solid rgba(245,192,68,.35); color: var(--warn);
+    border-radius: 10px; padding: 9px 14px; font-size: 13px; text-align: center; }
   .label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin-bottom: 10px; }
   .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--panel2); border-radius: 10px; padding: 4px; gap: 4px; }
   .seg button { border: none; background: transparent; color: var(--dim); padding: 10px 4px; border-radius: 7px;
@@ -74,6 +76,7 @@
       <svg id="icoStop" viewBox="0 0 24 24" fill="currentColor" hidden><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg>
     </button>
     <div id="msg">Press play to listen</div>
+    <div id="warn" class="warn" hidden></div>
   </section>
 
   <section class="card">
@@ -96,7 +99,9 @@
     <div><span>Sample rate</span><b id="sr">—</b></div>
     <div><span>Bit depth</span><b id="bd">—</b></div>
     <div><span>Buffer</span><b id="fill">—</b></div>
+    <div><span>Data rate</span><b id="rate">—</b></div>
     <div><span>Dropouts</span><b id="xr">0</b></div>
+    <div><span>Lost packets</span><b id="lost">0</b></div>
   </section>
 
   <footer>Live mix stream · uncompressed PCM<br>© Samo Pospíšil — sound / mix / master</footer>

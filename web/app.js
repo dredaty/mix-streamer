@@ -8,6 +8,9 @@
   let fmt = null;                 // {sampleRate, bitDepth, channels} of the stream
   let latencyMs = Number(localStorage.getItem("mxs-latency") || 250);
   let reconnectTimer = null;
+  let lastSeq = -1, lost = 0, rxBytes = 0, rxT0 = performance.now();
+  const problems = [];   // timestamps of lost-packet / underrun events
+  let lastUnderruns = 0;
 
   // ------------------------------------------------------------ status polling
   async function pollStatus() {
@@ -63,6 +66,8 @@
         node.connect(ctx.destination);
       }
       await ctx.resume();
+      lost = 0; lastUnderruns = 0; problems.length = 0;
+      $("lost").textContent = "0"; $("warn").hidden = true;
       node.port.postMessage({ type: "reset" });
       node.port.postMessage({ type: "latency", ms: latencyMs });
       if (fmt) node.port.postMessage({ type: "format", sampleRate: fmt.sampleRate });
@@ -93,6 +98,7 @@
 
   // ------------------------------------------------------------ websocket
   function connect() {
+    lastSeq = -1;
     ws = new WebSocket(wsBase + "/listen");
     ws.binaryType = "arraybuffer";
     ws.onopen = () => msg("Connected — buffering…");
@@ -120,6 +126,14 @@
     const dv = new DataView(ab);
     if (dv.getUint32(0, true) !== MAGIC) return;
     const sampleRate = dv.getUint32(4, true), bitDepth = dv.getUint8(8), channels = dv.getUint8(9);
+    const seq = dv.getUint32(12, true);
+    let gap = false;
+    if (lastSeq >= 0 && seq !== ((lastSeq + 1) >>> 0)) {
+      const missed = (seq - lastSeq - 1) >>> 0;
+      if (missed < 100000) { lost += missed; gap = true; problem(); }
+    }
+    lastSeq = seq;
+    rxBytes += ab.byteLength;
 
     if (!fmt || fmt.sampleRate !== sampleRate || fmt.bitDepth !== bitDepth || fmt.channels !== channels) {
       fmt = { sampleRate, bitDepth, channels };
@@ -153,7 +167,19 @@
         if (channels === 1) out[f * 2 + 1] = out[f * 2];
       }
     }
-    node.port.postMessage({ type: "data", samples: out }, [out.buffer]);
+    node.port.postMessage({ type: "data", samples: out, gap }, [out.buffer]);
+  }
+
+  // ------------------------------------------------------------ connection warning
+  function problem() { problems.push(performance.now()); }
+  function updateWarning() {
+    const now = performance.now();
+    while (problems.length && now - problems[0] > 30000) problems.shift();
+    const show = problems.length >= 3;
+    $("warn").toggleAttribute("hidden", !show);
+    if (show) $("warn").textContent = latencyMs < 500
+      ? "Unstable connection — switch latency to High (500 ms)."
+      : "Unstable connection — try a faster network (Wi-Fi / LAN).";
   }
 
   // ------------------------------------------------------------ meters
@@ -167,6 +193,15 @@
     if (playing) {
       $("fill").textContent = Math.round(m.fillMs) + " ms";
       $("xr").textContent = m.underruns;
+      $("lost").textContent = lost;
+      if (m.underruns > lastUnderruns) problem();
+      lastUnderruns = m.underruns;
+      const now = performance.now();
+      if (now - rxT0 >= 1000) {
+        $("rate").textContent = Math.round((rxBytes * 8) / (now - rxT0)) + " kbit/s";
+        rxBytes = 0; rxT0 = now;
+      }
+      updateWarning();
       if (m.state !== lastState && ws && ws.readyState === 1) {
         msg(m.state === "playing" ? "Playing" : "Buffering…");
       }

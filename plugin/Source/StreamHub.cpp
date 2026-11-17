@@ -98,8 +98,18 @@ public:
         {
             const juce::ScopedLock sl (qlock);
             queue.push_back ({ std::move (p), isText });
-            while (queue.size() > maxQueued) // slow client: keep newest audio
-                queue.pop_front();
+
+            // Client can't keep up: drop a whole block of old audio at once (one splice,
+            // which the player crossfades) instead of one packet at a time (a click every packet).
+            if (queue.size() > maxQueued)
+            {
+                std::deque<Item> kept;
+                size_t audio = 0;
+                for (auto it = queue.rbegin(); it != queue.rend(); ++it)
+                    if (it->text || audio++ < maxQueued / 2)
+                        kept.push_front (std::move (*it));
+                queue.swap (kept);
+            }
         }
         notify();
     }
@@ -108,7 +118,7 @@ public:
 
 private:
     struct Item { Packet data; bool text; };
-    static constexpr size_t maxQueued = 150;   // ~1.5 s of 10 ms packets
+    static constexpr size_t maxQueued = 150;   // ~3 s of 20 ms packets
 
     void run() override
     {

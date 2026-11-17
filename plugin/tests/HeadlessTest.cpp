@@ -90,6 +90,10 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    // tests below verify bit-exact 24-bit transport
+    if (mode != "--serve")
+        proc->apvts.getParameter (MixStreamerProcessor::qualityParamId)->setValueNotifyingHost (1.0f);
+
     Driver drv { *proc };
     auto& hub = proc->getHub();
 
@@ -167,7 +171,7 @@ int main (int argc, char** argv)
     }
     std::cout << "  frames " << frames << ", samples " << samples << ", peak " << peak
               << ", |L+R| max " << maxErrLR << ", gaps " << gaps << std::endl;
-    ok &= check (frames > 100 && samples > 48000 * 2.5, "audio received in real time");
+    ok &= check (frames > 50 && samples > 48000 * 2.5, "audio received in real time");
     ok &= check (badFrames == 0 && gaps == 0, "headers valid, no sequence gaps");
     ok &= check (std::abs (peak - 0.5) < 1e-4 && maxErrLR == 0.0, "24-bit content bit-exact");
     ok &= check (sawStatus, "status message received");
